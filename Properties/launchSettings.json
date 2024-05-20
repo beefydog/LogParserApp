@@ -1,0 +1,11 @@
+﻿{
+  "profiles": {
+    "LogParserApp": {
+      "commandName": "Project",
+      "commandLineArgs": "-filetype \"smtp\"  -postprocess \"keep\" ",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
