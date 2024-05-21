@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using LogParserApp.Data;
+using LogParserApp.Utilities;
 
 internal partial class Program : ProgramBase
 {
@@ -35,6 +36,7 @@ internal partial class Program : ProgramBase
 
         string postProcess = settings.TryGetValue("postprocess", out List<string>? value3) && value3.Count > 0 ? value3[0].ToLower() : "keep";
 
+
         foreach (var fileType in value)
         {
             var logFiles = Directory.GetFiles(folderPath ?? @"C:\logs", $"{fileType}_*.txt")
@@ -46,42 +48,47 @@ internal partial class Program : ProgramBase
                 .OrderBy(f => f.OrderKey)
                 .Select(f => f.FileName);
 
+            var logFileBatches = logFiles.ChunkBy(5); // Process files in batches of 5
 
-            foreach (var file in logFiles)
+            foreach (var batch in logFileBatches)
             {
-                Console.WriteLine($"Processing file: {file}");
-
-                using var scope = host.Services.CreateScope();
-                var logFileProcessor = scope.ServiceProvider.GetRequiredService<LogFileProcessor>();
-
-                var processSuccess = (await logFileProcessor.ProcessLogFileAsync(file));
-
-                if (processSuccess)
-                {
-                    switch (postProcess)
-                    {
-                        case "archive":
-                            string targetPath = Path.Combine(archivePath ?? @"C:\logs\archive", Path.GetFileName(file));
-                            File.Move(file, targetPath);
-                            Console.WriteLine($"Archived file to: {targetPath}");
-                            break;
-                        case "delete":
-                            File.Delete(file);
-                            Console.WriteLine($"Deleted file: {file}");
-                            break;
-                        case "keep":
-                            // Nothing to do, may add something later to keep, but rename, or what-have-you
-                            break;
-                    }
-                }
-                else
-                {
-                    Console.WriteLine($"Processing failed for file: {file}, skipping post-processing steps.");
-                }
+                var tasks = batch.Select(file => ProcessFileAsync(file, host, archivePath, postProcess)).ToArray();
+                await Task.WhenAll(tasks);
             }
         }
+    }
 
-      //  await host.RunAsync();
+    private static async Task ProcessFileAsync(string file, IHost host, string? archivePath, string postProcess)
+    {
+        Console.WriteLine($"Processing file: {file}");
+
+        using var scope = host.Services.CreateScope();
+        var logFileProcessor = scope.ServiceProvider.GetRequiredService<LogFileProcessor>();
+
+        var processSuccess = await logFileProcessor.ProcessLogFileAsync(file);
+
+        if (processSuccess)
+        {
+            switch (postProcess)
+            {
+                case "archive":
+                    string targetPath = Path.Combine(archivePath ?? @"C:\logs\archive", Path.GetFileName(file));
+                    File.Move(file, targetPath);
+                    Console.WriteLine($"Archived file to: {targetPath}");
+                    break;
+                case "delete":
+                    File.Delete(file);
+                    Console.WriteLine($"Deleted file: {file}");
+                    break;
+                case "keep":
+                    // Nothing to do, may add something later to keep, but rename, or what-have-you
+                    break;
+            }
+        }
+        else
+        {
+            Console.WriteLine($"Processing failed for file: {file}, skipping post-processing steps.");
+        }
     }
 
     static IHostBuilder CreateHostBuilder(string[] args) =>
