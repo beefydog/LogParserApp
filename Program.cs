@@ -35,10 +35,14 @@ internal partial class Program : ProgramBase
                               : config["LogFileSettings:ArchivePath"];
 
         string postProcess = settings.TryGetValue("postprocess", out List<string>? value3) && value3.Count > 0 ? value3[0].ToLower() : "keep";
+        bool afterProcessing = settings.ContainsKey("after");
 
+        List<string> processedFiles = [];
 
         foreach (var fileType in value)
         {
+            Console.WriteLine($"Processing file type: {fileType}");
+
             var logFiles = Directory.GetFiles(folderPath ?? @"C:\logs", $"{fileType}_*.txt")
                 .Select(file => new
                 {
@@ -52,13 +56,18 @@ internal partial class Program : ProgramBase
 
             foreach (var batch in logFileBatches)
             {
-                var tasks = batch.Select(file => ProcessFileAsync(file, host, archivePath, postProcess)).ToArray();
+                var tasks = batch.Select(file => ProcessFileAsync(file, host, archivePath, postProcess, afterProcessing, processedFiles)).ToArray();
                 await Task.WhenAll(tasks);
             }
         }
+
+        if (afterProcessing)
+        {
+            PostProcessFiles(processedFiles, archivePath, postProcess);
+        }
     }
 
-    private static async Task ProcessFileAsync(string file, IHost host, string? archivePath, string postProcess)
+    private static async Task<bool> ProcessFileAsync(string file, IHost host, string? archivePath, string postProcess, bool afterProcessing, List<string> processedFiles)
     {
         Console.WriteLine($"Processing file: {file}");
 
@@ -69,27 +78,55 @@ internal partial class Program : ProgramBase
 
         if (processSuccess)
         {
-            switch (postProcess)
+            if (afterProcessing)
             {
-                case "archive":
-                    string targetPath = Path.Combine(archivePath ?? @"C:\logs\archive", Path.GetFileName(file));
-                    File.Move(file, targetPath);
-                    Console.WriteLine($"Archived file to: {targetPath}");
-                    break;
-                case "delete":
-                    File.Delete(file);
-                    Console.WriteLine($"Deleted file: {file}");
-                    break;
-                case "keep":
-                    // Nothing to do, may add something later to keep, but rename, or what-have-you
-                    break;
+                lock (processedFiles)
+                {
+                    processedFiles.Add(file);
+                }
+            }
+            else
+            {
+                PostProcessFile(file, archivePath, postProcess);
             }
         }
         else
         {
             Console.WriteLine($"Processing failed for file: {file}, skipping post-processing steps.");
         }
+
+        return processSuccess;
     }
+
+    private static void PostProcessFile(string file, string? archivePath, string postProcess)
+    {
+        switch (postProcess)
+        {
+            case "archive":
+                string targetPath = Path.Combine(archivePath ?? @"C:\logs\archive", Path.GetFileName(file));
+                File.Move(file, targetPath);
+                Console.WriteLine($"Archived file to: {targetPath}");
+                break;
+            case "delete":
+                File.Delete(file);
+                Console.WriteLine($"Deleted file: {file}");
+                break;
+            case "keep":
+                break;
+            default:
+                break;
+        }
+    }
+
+
+    private static void PostProcessFiles(List<string> files, string? archivePath, string postProcess)
+    {
+        foreach (var file in files)
+        {
+            PostProcessFile(file, archivePath, postProcess);
+        }
+    }
+
 
     static IHostBuilder CreateHostBuilder(string[] args) =>
     Host.CreateDefaultBuilder(args)

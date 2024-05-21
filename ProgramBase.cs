@@ -39,6 +39,12 @@ public class ProgramBase
             settings["postprocess"] = [value2[0]];
         }
 
+        // Add support for the 'after' argument
+        if (settings.TryGetValue("after", out List<string>? value3) && value3.Count == 0)
+        {
+            settings["after"] = ["true"]; // Indicate that the 'after' argument is present
+        }
+
         return settings;
     }
 

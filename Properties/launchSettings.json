@@ -2,7 +2,7 @@
   "profiles": {
     "LogParserApp": {
       "commandName": "Project",
-      "commandLineArgs": "-filetype \"smtp\"  -postprocess \"keep\" ",
+      "commandLineArgs": "-filetype \"smtp\"  -postprocess \"archive\" -after ",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
