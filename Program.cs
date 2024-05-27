@@ -10,6 +10,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using LogParserApp.Data;
 using LogParserApp.Utilities;
+using Spectre.Console;
 
 internal partial class Program : ProgramBase
 {
@@ -19,13 +20,27 @@ internal partial class Program : ProgramBase
 
         if (!settings.TryGetValue("filetype", out List<string>? value) || value.Count == 0)
         {
-            Console.WriteLine("Please specify at least one filetype using '-filetype \"smtp, pop3\"'.");
+            AnsiConsole.MarkupLine("Please specify at least one filetype using [green3]-filetype \"[gold3]smtp[/],[gold3]pop3[/]\"[/].");
+            AnsiConsole.MarkupLine("Valid log file types: [gold3]accounts[/],[gold3]contentfiltering[/],[gold3]imap4[/],[gold3]outmail[/],[gold3]outmailfail[/],[gold3]pop3[/],[gold3]pop3retr[/],[gold3]remoteadmin[/],[gold3]server[/],[gold3]smtp[/],[gold3]webmail[/]");
+            Console.WriteLine();
+            AnsiConsole.MarkupLine("To specify post processing options: use the [green3]-postprocess[/] switch followed by [green3]\"[gold3]archive[/]\"[/] or [green3]\"[gold3]delete[/]\"[/] ");
+            Console.WriteLine();
+            AnsiConsole.MarkupLine("If archiving, specify the path after the [green3]\"[gold3]archive[/]\"[/] option as in: ");
+            AnsiConsole.MarkupLine("[green3]-postprocess \"[gold3]archive[/]\" \"[yellow3_1]C:\\MyLogArchive[/]\"[/]");
+            Console.WriteLine();
+            AnsiConsole.MarkupLine("If you which to perform archive or delete AFTER all files have been processed, use the following:");
+            AnsiConsole.MarkupLine("[green3]-postprocess \"[gold3]archive[/]\" \"[yellow3_1]C:\\MyLogArchive[/]\" -after[/]");
+            Console.WriteLine();
+            AnsiConsole.MarkupLine("Example with all options specified:");
+            AnsiConsole.MarkupLine("[green4]LogParserApp[/] [green3]-filetype \"[gold3]smtp[/],[gold3]pop3[/],[gold3]imap4[/]\"  -postprocess \"[gold3]archive[/]\" \"[yellow3_1]C:\\MyLogArchive[/]\" -after[/]");
+            AnsiConsole.MarkupLine("This would process [gold3]smtp[/], [gold3]pop3[/] and [gold3]imap4[/] logs, archive them and do so after files parsed successfully.");
+            Console.WriteLine();
+            AnsiConsole.MarkupLine("The default archive folder path can be specified in the [yellow3_1]appsettings.json[/] file");
             return;
         }
 
         var host = CreateHostBuilder(args).Build();
 
-        // Access the configuration and the LogFileProcessor service
         var config = host.Services.GetRequiredService<IConfiguration>();
 
         string? folderPath = settings.TryGetValue("folderpath", out List<string>? value1) && value1.Count > 0 ? value1[0]
@@ -41,7 +56,7 @@ internal partial class Program : ProgramBase
 
         foreach (var fileType in value)
         {
-            Console.WriteLine($"Processing file type: {fileType}");
+            AnsiConsole.MarkupLine($"[green3]Processing log type:[/] [yellow3_1]{fileType}[/]");
 
             var logFiles = Directory.GetFiles(folderPath ?? @"C:\logs", $"{fileType}_*.txt")
                 .Select(file => new
@@ -69,7 +84,7 @@ internal partial class Program : ProgramBase
 
     private static async Task<bool> ProcessFileAsync(string file, IHost host, string? archivePath, string postProcess, bool afterProcessing, List<string> processedFiles)
     {
-        Console.WriteLine($"Processing file: {file}");
+        AnsiConsole.MarkupLine($"[green3]Processing file:[/] [yellow3_1]{file}[/]");
 
         using var scope = host.Services.CreateScope();
         var logFileProcessor = scope.ServiceProvider.GetRequiredService<LogFileProcessor>();
@@ -92,7 +107,7 @@ internal partial class Program : ProgramBase
         }
         else
         {
-            Console.WriteLine($"Processing failed for file: {file}, skipping post-processing steps.");
+            AnsiConsole.MarkupLine($"[red]Processing failed for file: [yellow3_1]{file}[/], skipping post-processing steps.[/]");
         }
 
         return processSuccess;
@@ -105,11 +120,11 @@ internal partial class Program : ProgramBase
             case "archive":
                 string targetPath = Path.Combine(archivePath ?? @"C:\logs\archive", Path.GetFileName(file));
                 File.Move(file, targetPath);
-                Console.WriteLine($"Archived file to: {targetPath}");
+                AnsiConsole.MarkupLine($"[aqua]Archived file to:[/] [yellow3_1]{targetPath}[/]");
                 break;
             case "delete":
                 File.Delete(file);
-                Console.WriteLine($"Deleted file: {file}");
+                AnsiConsole.MarkupLine($"[aqua]Deleted file:[/] [yellow3_1]{file}[/]");
                 break;
             case "keep":
                 break;
@@ -141,11 +156,12 @@ internal partial class Program : ProgramBase
                 options.UseSqlServer(hostContext.Configuration.GetConnectionString("DefaultConnection")));
 
             services.AddScoped<LogFileProcessor>();
-            services.AddLogging(); 
+            services.AddLogging();
 
             services.AddSingleton<IConfiguration>(hostContext.Configuration);
         })
-        .ConfigureLogging(logging => {
+        .ConfigureLogging(logging =>
+        {
             logging.ClearProviders();
             logging.AddConsole();
             logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
